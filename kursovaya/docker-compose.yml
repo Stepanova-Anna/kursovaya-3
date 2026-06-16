@@ -1,0 +1,64 @@
+#services:
+#  currency-app:
+#    build: .
+#    container_name: currency-app
+#    restart: unless-stopped
+#    ports:
+#      - "8888:8888"
+#    environment:
+#      - PORT=8888
+
+services:
+  # Ваше приложение
+  currency-app:
+    build: .
+    container_name: currency-app
+    restart: unless-stopped
+    expose:
+      - "8888"
+    environment:
+      - VIRTUAL_HOST=${DOMAIN:-localhost}
+      - VIRTUAL_PORT=8888
+      - LETSENCRYPT_HOST=${DOMAIN:-localhost}
+      - LETSENCRYPT_EMAIL=${EMAIL:-admin@example.com}
+    networks:
+      - proxy-network
+
+  # NGINX Reverse Proxy
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:latest
+    container_name: nginx-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./certs:/etc/nginx/certs
+      - ./vhost.d:/etc/nginx/vhost.d
+      - ./html:/usr/share/nginx/html
+    networks:
+      - proxy-network
+
+  # Let's Encrypt автоматический выпуск сертификатов
+  letsencrypt:
+    image: nginxproxy/acme-companion:latest
+    container_name: nginx-letsencrypt
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./certs:/etc/nginx/certs
+      - ./vhost.d:/etc/nginx/vhost.d
+      - ./html:/usr/share/nginx/html
+      - ./acme:/etc/acme.sh
+    environment:
+      - DEFAULT_EMAIL=${EMAIL:-admin@example.com}
+      - NGINX_PROXY_CONTAINER=nginx-proxy
+    depends_on:
+      - nginx-proxy
+    networks:
+      - proxy-network
+
+networks:
+  proxy-network:
+    driver: bridge
